@@ -94,10 +94,10 @@ impl<W: TodoWriter, C: TodoCacheOps> DeleteTodoCommand<W, C> {
         }
 
         // 3. キャッシュ無効化（エラーは無視）
-        if let Some(cache) = &self.cache {
-            if let Err(e) = cache.delete(id).await {
-                warn!(todo_id = %id, error = %e, "Failed to invalidate cache for deleted todo");
-            }
+        if let Some(cache) = &self.cache
+            && let Err(e) = cache.delete(id).await
+        {
+            warn!(todo_id = %id, error = %e, "Failed to invalidate cache for deleted todo");
         }
 
         // 4. ログ出力

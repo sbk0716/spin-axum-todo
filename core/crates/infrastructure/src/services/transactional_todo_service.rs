@@ -254,7 +254,7 @@ impl TransactionalTodoService {
                 "#,
             )
             .bind(todo.id) // $1: UUID
-            .bind(&todo.user_id) // $2: 所有者 ID
+            .bind(todo.user_id) // $2: 所有者 ID
             .bind(&todo.title) // $3: タイトル
             .bind(&todo.description) // $4: 説明
             .bind(todo.completed) // $5: 完了フラグ
@@ -329,7 +329,7 @@ impl TransactionalTodoService {
             "#,
         )
         .bind(todo.id)
-        .bind(&todo.user_id)
+        .bind(todo.user_id)
         .bind(&todo.title)
         .bind(&todo.description)
         .bind(todo.completed)

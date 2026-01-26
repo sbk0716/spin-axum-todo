@@ -5,7 +5,8 @@
 # =============================================================================
 
 .PHONY: help setup up down migrate build build-core build-edge \
-        run run-core run-edge test test-edge test-core test-all status demo clean expand logs
+        run run-core run-edge test test-edge test-core test-all status demo clean expand logs \
+        s3-ls s3-create-bucket
 
 # デフォルトターゲット
 .DEFAULT_GOAL := help
@@ -30,6 +31,13 @@ JWT_SECRET ?= super-secret-key
 EDGE_SECRET ?= super-secret-edge-key
 RUST_LOG ?= info
 
+# S3/LocalStack 設定
+S3_ENDPOINT_URL ?= http://localhost:4566
+S3_BUCKET ?= todo-files
+AWS_DEFAULT_REGION ?= ap-northeast-1
+AWS_ACCESS_KEY_ID ?= test
+AWS_SECRET_ACCESS_KEY ?= test
+
 # =============================================================================
 # ヘルプ
 # =============================================================================
@@ -53,6 +61,9 @@ help: ## このヘルプを表示
 	@echo "$(GREEN)ユーティリティ:$(RESET)"
 	@grep -E '^(status|demo|logs|clean):.*?## .*$$' Makefile | sed 's/:.*##/:##/' | awk 'BEGIN {FS = ":##"}; {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
+	@echo "$(GREEN)S3/LocalStack:$(RESET)"
+	@grep -E '^(s3-ls|s3-create-bucket):.*?## .*$$' Makefile | sed 's/:.*##/:##/' | awk 'BEGIN {FS = ":##"}; {printf "  $(CYAN)%-15s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
 
 # =============================================================================
 # セットアップ
@@ -74,7 +85,7 @@ setup: .env up migrate build ## 初期セットアップ（.env作成、DB起動
 	cp .env.example .env
 	@echo "    $(GREEN).env ファイルを作成しました$(RESET)"
 
-up: ## インフラ起動（PostgreSQL + Redis）
+up: ## インフラ起動（PostgreSQL + Redis + LocalStack）
 	@echo ">>> Docker Compose でインフラを起動中..."
 	docker compose up -d
 	@echo ">>> PostgreSQL の起動を待機中..."
@@ -83,6 +94,10 @@ up: ## インフラ起動（PostgreSQL + Redis）
 	@echo ">>> Redis の起動を待機中..."
 	@until docker compose exec -T redis redis-cli ping > /dev/null 2>&1; do sleep 1; done
 	@echo "    $(GREEN)Redis 起動完了$(RESET)"
+	@echo ">>> LocalStack (S3) の起動を待機中..."
+	@until curl -s http://localhost:4566/_localstack/health | grep -q '"s3": *"running"' 2>/dev/null; do sleep 1; done
+	@echo "    $(GREEN)LocalStack 起動完了$(RESET)"
+	@$(MAKE) s3-create-bucket
 
 down: ## インフラ停止
 	docker compose down
@@ -131,6 +146,8 @@ run-core: ## Core 層を起動
 	@echo "    DATABASE_WRITER_URL=$(DATABASE_WRITER_URL)"
 	@echo "    DATABASE_READER_URL=$(DATABASE_READER_URL)"
 	@echo "    REDIS_URL=$(REDIS_URL)"
+	@echo "    S3_ENDPOINT_URL=$(S3_ENDPOINT_URL)"
+	@echo "    S3_BUCKET=$(S3_BUCKET)"
 	@echo "    JWT_SECRET=****"
 	@echo "    RUST_LOG=$(RUST_LOG)"
 	cd core && \
@@ -138,6 +155,11 @@ run-core: ## Core 層を起動
 		DATABASE_WRITER_URL=$(DATABASE_WRITER_URL) \
 		DATABASE_READER_URL=$(DATABASE_READER_URL) \
 		REDIS_URL=$(REDIS_URL) \
+		S3_ENDPOINT_URL=$(S3_ENDPOINT_URL) \
+		S3_BUCKET=$(S3_BUCKET) \
+		AWS_DEFAULT_REGION=$(AWS_DEFAULT_REGION) \
+		AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) \
+		AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) \
 		JWT_SECRET=$(JWT_SECRET) \
 		EDGE_SECRET=$(EDGE_SECRET) \
 		RUST_LOG=$(RUST_LOG) \
@@ -168,6 +190,9 @@ status: ## サービスの稼働状況を確認
 	@echo ""
 	@echo "$(CYAN)Docker Compose:$(RESET)"
 	@docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  $(RED)Docker Compose 未起動$(RESET)"
+	@echo ""
+	@echo "$(CYAN)LocalStack (S3):$(RESET)"
+	@curl -s http://localhost:4566/_localstack/health 2>/dev/null | grep -o '"s3": *"[^"]*"' || echo "  $(RED)未起動$(RESET)"
 	@echo ""
 	@echo "$(CYAN)Core 層 (port 3001):$(RESET)"
 	@curl -s http://localhost:3001/health 2>/dev/null && echo "" || echo "  $(RED)未起動$(RESET)"
@@ -225,3 +250,27 @@ clean: ## ビルド成果物を削除
 	cd core && cargo clean
 	rm -rf edge/target edge/.spin
 	@echo "    $(GREEN)クリーン完了$(RESET)"
+
+# =============================================================================
+# S3/LocalStack
+# =============================================================================
+
+# AWS CLI を Docker 経由で実行（ローカルインストール不要）
+AWS_CLI = docker compose exec -T localstack awslocal
+
+s3-ls: ## S3 バケット内のファイル一覧を表示
+	@echo ">>> S3 バケット一覧..."
+	@$(AWS_CLI) s3 ls 2>/dev/null || echo "  $(RED)LocalStack 未起動$(RESET)"
+	@echo ""
+	@echo ">>> $(S3_BUCKET) バケット内のファイル..."
+	@$(AWS_CLI) s3 ls s3://$(S3_BUCKET)/ --recursive 2>/dev/null || echo "  $(YELLOW)バケットが存在しないか空です$(RESET)"
+
+s3-create-bucket: ## S3 バケットを作成（LocalStack 用）
+	@echo ">>> S3 バケット '$(S3_BUCKET)' を確認中..."
+	@if $(AWS_CLI) s3 ls s3://$(S3_BUCKET) > /dev/null 2>&1; then \
+		echo "    $(GREEN)バケット '$(S3_BUCKET)' は既に存在します$(RESET)"; \
+	else \
+		echo ">>> バケット '$(S3_BUCKET)' を作成中..."; \
+		$(AWS_CLI) s3 mb s3://$(S3_BUCKET) && \
+		echo "    $(GREEN)バケット '$(S3_BUCKET)' を作成しました$(RESET)"; \
+	fi

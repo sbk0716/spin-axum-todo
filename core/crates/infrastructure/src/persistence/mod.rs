@@ -17,6 +17,10 @@
 // │ redis/                                                      │
 // │ - TodoCache: Redis を使用したキャッシュ実装                 │
 // │ - Cache-Aside パターン + Write-Through/無効化               │
+// ├─────────────────────────────────────────────────────────────┤
+// │ s3/                                                         │
+// │ - S3StorageService: ファイルストレージ実装                  │
+// │ - LocalStack 対応（開発環境）                               │
 // └─────────────────────────────────────────────────────────────┘
 //
 // CQRS パターン（Command Query Responsibility Segregation）:
@@ -37,9 +41,15 @@ pub mod postgres;
 /// Redis キャッシュ実装
 pub mod redis;
 
+/// S3 ストレージ実装
+pub mod s3;
+
 // -----------------------------------------------------------------------------
 // 再エクスポート（Re-export）
 // -----------------------------------------------------------------------------
 
 /// DbPools を直接アクセス可能にする
 pub use db_pools::DbPools;
+
+/// S3StorageService を直接アクセス可能にする
+pub use s3::S3StorageService;

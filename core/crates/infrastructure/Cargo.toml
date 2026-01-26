@@ -102,3 +102,14 @@ sqlx = { workspace = true }
 #   - AsyncCommands: GET, SET, DEL, EXPIRE
 #   - aio::MultiplexedConnection: 非同期接続
 redis = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# AWS SDK (S3)
+# -----------------------------------------------------------------------------
+# aws-config: AWS SDK 設定（認証、リージョン、エンドポイント）
+# behavior-version-latest: 最新の動作バージョンを使用
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+
+# aws-sdk-s3: S3 クライアント
+# ファイルストレージ操作（upload, download, delete）
+aws-sdk-s3 = "1.65"

@@ -130,6 +130,11 @@ impl From<DomainError> for ApiError {
 
             // キャッシュエラー → 500 Internal Server Error
             DomainError::Cache(msg) => ApiError::Internal(format!("Cache error: {}", msg)),
+
+            // 外部サービスエラー → 500 Internal Server Error
+            DomainError::External(msg) => {
+                ApiError::Internal(format!("External service error: {}", msg))
+            }
         }
     }
 }

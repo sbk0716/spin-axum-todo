@@ -1,7 +1,7 @@
 # アーキテクチャ
 
 本プロジェクトはクリーンアーキテクチャに基づき、4つの層に分離されています。
-外部システム（Client、PostgreSQL、Redis）との通信は最外層で行い、ビジネスロジックは内側の層で保護されています。
+外部システム（Client、PostgreSQL、Redis、S3）との通信は最外層で行い、ビジネスロジックは内側の層で保護されています。
 
 ## 全体構成
 
@@ -13,6 +13,7 @@ flowchart TB
         Client[("Client")]
         PG[("PostgreSQL")]
         RD[("Redis")]
+        S3[("S3/LocalStack")]
     end
 
     subgraph API["api クレート"]
@@ -26,14 +27,15 @@ flowchart TB
     end
 
     subgraph Application["application 層"]
-        UC["Use Cases<br/>ビジネスロジック"]
+        Commands["Commands<br/>Create, Update, Delete"]
+        Queries["Queries<br/>GetTodo, ListTodos"]
         Auth["AuthService<br/>認証サービス"]
         DTO["DTOs<br/>データ転送"]
     end
 
     subgraph Domain["domain 層"]
         Entity["Todo/User/File Entity<br/>エンティティ"]
-        Repo["TodoReader/Writer<br/>UserReader/Writer<br/>FileReader/Writer<br/>CQRS トレイト定義"]
+        Repo["TodoReader/Writer<br/>UserReader/Writer<br/>FileReader/Writer<br/>StorageOps<br/>CQRS トレイト定義"]
         DomainErr["DomainError<br/>エラー型"]
     end
 
@@ -42,22 +44,29 @@ flowchart TB
         Cache["TodoCache<br/>Redis 実装"]
         CachedRepo["CachedTodoReader<br/>デコレータ"]
         TxService["TransactionalTodoService<br/>バッチ操作"]
+        S3Service["S3StorageService<br/>ファイルストレージ実装"]
     end
 
     Client <-->|HTTP Request/Response| Router
     Router -->|dispatch| Handler
-    Handler -->|call| UC
+    Handler -->|call| Commands
+    Handler -->|call| Queries
     Handler -->|convert| ApiError
-    UC -->|use| DTO
-    UC -->|use| Entity
-    UC -.->|depends on| Repo
+    Commands -->|use| DTO
+    Commands -->|use| Entity
+    Queries -->|use| Entity
+    Commands -.->|depends on| Repo
+    Queries -.->|depends on| Repo
     CachedRepo -.->|implements| Repo
     PgRepo -.->|implements| Repo
+    S3Service -.->|implements| Repo
     CachedRepo -->|delegates| PgRepo
     CachedRepo -->|uses| Cache
     PgRepo <-->|SQL Query| PG
     Cache <-->|GET/SET| RD
+    S3Service <-->|PUT/GET/DELETE| S3
     Main -->|creates| CachedRepo
+    Main -->|creates| S3Service
     Main -->|starts| Router
 ```
 

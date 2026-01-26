@@ -12,7 +12,8 @@ https://zenn.dev/sbk0716/books/52b1cd16ad20a5
 
 書いてみて思ったのは、「やっぱり手を動かさないと身につかない」ということ。Rust、WIT、Spin、WASM の実践的な知識を深めるため、**WASM + コンテナのハイブリッドアーキテクチャ**で TODO API を作ってみました。
 
-**リポジトリ**: https://github.com/sbk0716/spin-axum-todo
+**リポジトリ**:
+https://github.com/sbk0716/spin-axum-todo
 
 ## なぜ WASM + コンテナなのか
 
@@ -112,19 +113,30 @@ flowchart TB
 Edge 層は **2 つの WASM コンポーネント**で構成されています。`gateway` が HTTP リクエストを受け取り、`auth` コンポーネントの `verify_token()` 関数を呼び出して JWT を検証します。この 2 つのコンポーネント間の通信は WIT（WebAssembly Interface Types）で型安全に定義されています。
 
 ```mermaid
-flowchart LR
-    subgraph Edge["Edge Layer"]
-        Gateway["gateway<br/>(HTTP エントリーポイント)"]
-        Auth["auth<br/>(JWT 検証)"]
+sequenceDiagram
+    autonumber
+    participant C as クライアント
+    box Edge Layer (Spin/WASM)
+        participant G as gateway
+        participant A as auth
+    end
+    box Core Layer (axum)
+        participant Core as axum
     end
 
-    Gateway -->|"WIT: import authenticator"| Auth
-    Auth -->|"WIT: export authenticator"| Gateway
+    C->>G: Authorization: Bearer JWT
 
-    Client["クライアント"] -->|"Authorization: Bearer JWT"| Gateway
-    Gateway -->|"verify_token(token)"| Auth
-    Auth -->|"AuthResult{user_id, authenticated}"| Gateway
-    Gateway -->|"HTTP + X-User-Id ヘッダー"| Core["Core Layer"]
+    Note over G,A: WIT Interface
+    G->>A: verify_token(token)
+    A-->>G: AuthResult{user_id, authenticated}
+
+    alt 認証成功
+        G->>Core: HTTP + X-User-Id ヘッダー
+        Core-->>G: レスポンス
+        G-->>C: レスポンス
+    else 認証失敗
+        G-->>C: 401 Unauthorized
+    end
 ```
 
 | コンポーネント | 役割                              | WIT                    |

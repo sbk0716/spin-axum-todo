@@ -5,12 +5,13 @@
 ## 概要
 
 Infrastructure 層は Domain 層で定義されたリポジトリトレイトの具象実装を提供します。
-PostgreSQL によるデータ永続化と Redis によるキャッシュを担当。
+PostgreSQL によるデータ永続化、Redis によるキャッシュ、S3/LocalStack によるファイルストレージを担当。
 
 ## 責務
 
 - **PostgreSQL 実装**: TodoReader/Writer, UserReader/Writer, FileReader/Writer
 - **Redis 実装**: TodoCacheOps
+- **S3 実装**: S3StorageService（ファイルストレージ）
 - **デコレータ**: CachedTodoReader（Cache-Aside パターン）
 - **トランザクション**: TransactionalTodoService（バッチ操作）
 - **DB 接続管理**: DbPools（Reader/Writer 分離）
@@ -31,9 +32,12 @@ src/
 │   │   ├── user_writer.rs  # PostgresUserWriter
 │   │   ├── file_reader.rs  # PostgresFileReader
 │   │   └── file_writer.rs  # PostgresFileWriter
-│   └── redis/
+│   ├── redis/
+│   │   ├── mod.rs
+│   │   └── todo_cache.rs   # TodoCache
+│   └── s3/
 │       ├── mod.rs
-│       └── todo_cache.rs   # TodoCache
+│       └── s3_storage_service.rs  # S3StorageService
 ├── repositories/
 │   ├── mod.rs
 │   └── cached_todo_reader.rs  # CachedTodoReader
@@ -133,6 +137,69 @@ impl TodoCacheOps for TodoCache {
         // DEL
     }
 }
+```
+
+## S3 実装
+
+### S3StorageService
+
+```rust
+pub struct S3StorageService {
+    client: Client,
+    bucket: String,
+}
+
+impl S3StorageService {
+    /// 環境変数から初期化（LocalStack 対応）
+    pub async fn from_env() -> Result<Self, DomainError> {
+        // S3_ENDPOINT_URL: LocalStack 用（オプション）
+        // S3_BUCKET: バケット名（デフォルト: todo-files）
+    }
+
+    /// ファイルをアップロード
+    pub async fn upload(
+        &self,
+        user_id: Uuid,
+        filename: &str,
+        content_type: &str,
+        data: Vec<u8>,
+    ) -> Result<String, DomainError> {
+        // S3 キー: users/{user_id}/files/{uuid}/{filename}
+    }
+
+    /// ファイルをダウンロード
+    pub async fn download(&self, storage_path: &str) -> Result<Vec<u8>, DomainError> {
+        // GET Object
+    }
+
+    /// ファイルを削除
+    pub async fn delete(&self, storage_path: &str) -> Result<(), DomainError> {
+        // DELETE Object（冪等）
+    }
+
+    /// バケットが存在することを確認（起動時チェック用）
+    pub async fn ensure_bucket_exists(&self) -> Result<(), DomainError> {
+        // HEAD Bucket → なければ CREATE Bucket
+    }
+}
+```
+
+### LocalStack 対応
+
+開発環境では LocalStack を使用して S3 をエミュレート:
+
+```rust
+let client = if let Some(ref endpoint) = endpoint_url {
+    // LocalStack 用（カスタムエンドポイント + パススタイル強制）
+    let s3_config = aws_sdk_s3::config::Builder::from(&sdk_config)
+        .endpoint_url(endpoint)
+        .force_path_style(true)  // LocalStack 互換性のため必要
+        .build();
+    Client::from_conf(s3_config)
+} else {
+    // 本番用（AWS 標準）
+    Client::new(&sdk_config)
+};
 ```
 
 ## デコレータ
@@ -291,6 +358,10 @@ serde_json = "1.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "uuid", "chrono"] }
 tracing = "0.1"
 uuid = "1.11"
+
+# AWS SDK for S3
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.65"
 ```
 
 ## 使用例
@@ -299,6 +370,7 @@ uuid = "1.11"
 use infrastructure::{
     DbPools, PostgresTodoReader, PostgresTodoWriter,
     TodoCache, CachedTodoReader, TransactionalTodoService,
+    S3StorageService,
 };
 
 // DB プール作成
@@ -315,4 +387,8 @@ let reader = CachedTodoReader::new(postgres_reader, cache.clone());
 
 // バッチサービス
 let batch = TransactionalTodoService::new(pools.writer.clone());
+
+// S3 ストレージサービス
+let storage = S3StorageService::from_env().await?;
+storage.ensure_bucket_exists().await?;
 ```

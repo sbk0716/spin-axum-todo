@@ -336,28 +336,118 @@ else
 fi
 
 # =============================================================================
-# ファイル付き TODO テスト
+# ファイルアップロード API テスト
+# =============================================================================
+echo ""
+echo "=== ファイルアップロード API テスト ==="
+
+# テスト用の一時ファイルを作成
+TEST_FILE=$(mktemp)
+echo "Edge test file content $(date +%s)" > "$TEST_FILE"
+
+echo ">>> POST /api/files/upload - ファイルアップロード..."
+UPLOAD_RESPONSE=$(curl -s -X POST "$EDGE_URL/api/files/upload" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@$TEST_FILE;filename=edge-test.txt;type=text/plain")
+if echo "$UPLOAD_RESPONSE" | grep -q '"storage_path"'; then
+    STORAGE_PATH=$(echo "$UPLOAD_RESPONSE" | grep -o '"storage_path":"[^"]*"' | cut -d'"' -f4)
+    pass "ファイルアップロード成功: $STORAGE_PATH"
+else
+    fail "ファイルアップロード失敗: $UPLOAD_RESPONSE"
+fi
+
+echo ">>> POST /api/files/upload - 認証なし（401 期待）..."
+NO_AUTH_UPLOAD=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$EDGE_URL/api/files/upload" \
+    -F "file=@$TEST_FILE;filename=test.txt;type=text/plain")
+if [ "$NO_AUTH_UPLOAD" = "401" ]; then
+    pass "認証なしで 401"
+else
+    fail "期待: 401, 実際: $NO_AUTH_UPLOAD"
+fi
+
+echo ">>> POST /api/files/upload - ファイルなし（400 期待）..."
+NO_FILE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$EDGE_URL/api/files/upload" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: multipart/form-data")
+if [ "$NO_FILE" = "400" ]; then
+    pass "ファイルなしで 400"
+else
+    fail "期待: 400, 実際: $NO_FILE"
+fi
+
+# 一時ファイルを削除
+rm -f "$TEST_FILE"
+
+# =============================================================================
+# ファイル付き TODO テスト（storage_path を使用）
 # =============================================================================
 echo ""
 echo "=== ファイル付き TODO テスト ==="
+
+# 新しいテストファイルをアップロード
+TEST_FILE2=$(mktemp)
+echo "File for TODO attachment via Edge" > "$TEST_FILE2"
+UPLOAD_FOR_TODO=$(curl -s -X POST "$EDGE_URL/api/files/upload" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@$TEST_FILE2;filename=attachment.txt;type=text/plain")
+ATTACH_STORAGE_PATH=$(echo "$UPLOAD_FOR_TODO" | grep -o '"storage_path":"[^"]*"' | cut -d'"' -f4)
+rm -f "$TEST_FILE2"
 
 echo ">>> POST /api/todos/with-files - ファイル付き TODO 作成..."
 FILES_RESPONSE=$(curl -s -X POST "$EDGE_URL/api/todos/with-files" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{
-        "title": "ファイル付き TODO",
-        "description": "テスト",
-        "files": [
-            {"filename": "test.pdf", "mime_type": "application/pdf", "size_bytes": 12345, "storage_path": "/uploads/test.pdf"},
-            {"filename": "image.png", "mime_type": "image/png", "size_bytes": 6789, "storage_path": "/uploads/image.png"}
+    -d "{
+        \"title\": \"ファイル付き TODO\",
+        \"description\": \"テスト\",
+        \"files\": [
+            {\"filename\": \"attachment.txt\", \"mime_type\": \"text/plain\", \"size_bytes\": 32, \"storage_path\": \"$ATTACH_STORAGE_PATH\"}
         ]
-    }')
+    }")
 if echo "$FILES_RESPONSE" | grep -q '"todo"' && echo "$FILES_RESPONSE" | grep -q '"files"'; then
     FILES_TODO_ID=$(echo "$FILES_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    FILE_ID=$(echo "$FILES_RESPONSE" | grep -o '"files":\[{"id":"[^"]*"' | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
     pass "ファイル付き TODO 作成: $FILES_TODO_ID"
 else
     fail "ファイル付き TODO 作成失敗: $FILES_RESPONSE"
+fi
+
+echo ">>> GET /api/files/{id}/download - ファイルダウンロード..."
+if [ -n "$FILE_ID" ]; then
+    DOWNLOAD_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: Bearer $TOKEN" \
+        "$EDGE_URL/api/files/$FILE_ID/download")
+    if [ "$DOWNLOAD_RESPONSE" = "200" ]; then
+        pass "ファイルダウンロード成功"
+    else
+        fail "ファイルダウンロード失敗: HTTP $DOWNLOAD_RESPONSE"
+    fi
+else
+    fail "ファイル ID が取得できなかったためスキップ"
+fi
+
+echo ">>> GET /api/files/{id}/download - 存在しないファイル（404 期待）..."
+NOT_FOUND_FILE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $TOKEN" \
+    "$EDGE_URL/api/files/00000000-0000-0000-0000-000000000000/download")
+if [ "$NOT_FOUND_FILE" = "404" ]; then
+    pass "存在しないファイルで 404"
+else
+    fail "期待: 404, 実際: $NOT_FOUND_FILE"
+fi
+
+echo ">>> DELETE /api/files/{id} - ファイル削除..."
+if [ -n "$FILE_ID" ]; then
+    DELETE_FILE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+        -H "Authorization: Bearer $TOKEN" \
+        "$EDGE_URL/api/files/$FILE_ID")
+    if [ "$DELETE_FILE_RESPONSE" = "204" ]; then
+        pass "ファイル削除成功"
+    else
+        fail "ファイル削除失敗: HTTP $DELETE_FILE_RESPONSE"
+    fi
+else
+    fail "ファイル ID が取得できなかったためスキップ"
 fi
 
 echo ">>> POST /api/todos/with-files - 無効なファイル名（400 期待）..."

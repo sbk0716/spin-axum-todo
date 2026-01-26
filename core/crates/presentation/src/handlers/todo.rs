@@ -46,7 +46,9 @@ use axum::{
 // TodoFilter: TODO 検索フィルタ（ビルダーパターン）
 // TodoReader/Writer: TODO 読み書きトレイト
 // UserReader/Writer: ユーザー読み書きトレイト
-use domain::{TodoCacheOps, TodoFilter, TodoReader, TodoWriter, UserReader, UserWriter};
+use domain::{
+    StorageOps, TodoCacheOps, TodoFilter, TodoReader, TodoWriter, UserReader, UserWriter,
+};
 
 // serde: シリアライズ/デシリアライズ
 // Deserialize: JSON → 構造体 変換
@@ -155,11 +157,12 @@ pub async fn list_todos<
     C: TodoCacheOps, // キャッシュ操作（このハンドラでは未使用）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: X-User-Id ヘッダーから抽出
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Query エクストラクタ: クエリパラメータを ListQuery にデシリアライズ
     Query(query): Query<ListQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -217,11 +220,12 @@ pub async fn create_todo<
     C: TodoCacheOps, // キャッシュ操作（Write-Through）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Json エクストラクタ: リクエストボディを CreateTodoRequest にデシリアライズ
     Json(req): Json<CreateTodoRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -277,11 +281,12 @@ pub async fn get_todo<
     C: TodoCacheOps, // キャッシュ操作（Reader 側で処理）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Path エクストラクタ: URL パスから id を抽出
     // /api/todos/{id} の {id} 部分が Uuid としてパースされる
     Path(id): Path<Uuid>,
@@ -331,11 +336,12 @@ pub async fn update_todo<
     C: TodoCacheOps, // キャッシュ操作（Cache Invalidation）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Path エクストラクタ: URL パスから id を抽出
     Path(id): Path<Uuid>,
     // Json エクストラクタ: リクエストボディを UpdateTodoRequest にデシリアライズ
@@ -389,11 +395,12 @@ pub async fn delete_todo<
     C: TodoCacheOps, // キャッシュ操作（Cache Invalidation）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Path エクストラクタ: URL パスから id を抽出
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {

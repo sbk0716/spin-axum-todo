@@ -1,7 +1,7 @@
 # Core Layer (axum)
 
 spin-axum-todo プロジェクトのコア層を担当する axum アプリケーション。
-PostgreSQL + Redis によるデータ永続化とキャッシュ、ローカル認証（JWT 発行）、クリーンアーキテクチャによる関心の分離を実現。
+PostgreSQL + Redis + S3 によるデータ永続化・キャッシュ・ファイルストレージ、ローカル認証（JWT 発行）、クリーンアーキテクチャによる関心の分離を実現。
 
 > **Note**: このコンポーネントは [Edge Layer](../edge/README.md) と連携して動作します。
 > 単体での使用も可能ですが、本番環境では Edge 層経由でのアクセスを推奨します。
@@ -14,6 +14,7 @@ PostgreSQL + Redis によるデータ永続化とキャッシュ、ローカル�
 | 非同期ランタイム   | tokio 1.x                                                 |
 | データベース       | PostgreSQL 17 + sqlx 0.8                                  |
 | キャッシュ         | Redis 7 + redis-rs 1.0                                    |
+| ストレージ         | S3 / LocalStack + aws-sdk-s3                              |
 | 認証               | bcrypt 0.18（パスワードハッシュ）+ jsonwebtoken 10（JWT） |
 | シリアライズ       | serde + serde_json                                        |
 | ログ               | tracing + tracing-subscriber                              |
@@ -56,13 +57,14 @@ flowchart TB
         Client[("Client")]
         PG[("PostgreSQL")]
         RD[("Redis")]
+        S3[("S3/LocalStack")]
     end
 
     subgraph Layers["Core Layer"]
         Presentation["Presentation 層<br/>Router, Handlers"]
         Application["Application 層<br/>Commands, Queries"]
         Domain["Domain 層<br/>Entities, Repositories"]
-        Infrastructure["Infrastructure 層<br/>Postgres, Redis 実装"]
+        Infrastructure["Infrastructure 層<br/>Postgres, Redis, S3 実装"]
     end
 
     Client <-->|HTTP| Presentation
@@ -71,23 +73,27 @@ flowchart TB
     Infrastructure -.->|implements| Domain
     Infrastructure <-->|SQL| PG
     Infrastructure <-->|GET/SET| RD
+    Infrastructure <-->|PUT/GET/DELETE| S3
 ```
 
 詳細は [アーキテクチャ](docs/architecture.md) を参照してください。
 
 ## API エンドポイント
 
-| メソッド | パス                    | 説明             |
-| -------- | ----------------------- | ---------------- |
-| POST     | `/api/auth/register`    | ユーザー登録     |
-| POST     | `/api/auth/login`       | ログイン         |
-| GET      | `/api/todos`            | TODO 一覧取得    |
-| POST     | `/api/todos`            | TODO 作成        |
-| GET      | `/api/todos/{id}`       | TODO 取得        |
-| PATCH    | `/api/todos/{id}`       | TODO 更新        |
-| DELETE   | `/api/todos/{id}`       | TODO 削除        |
-| POST     | `/api/todos/batch`      | バッチ TODO 作成 |
-| POST     | `/api/todos/with-files` | TODO + ファイル  |
+| メソッド | パス                       | 説明                   |
+| -------- | -------------------------- | ---------------------- |
+| POST     | `/api/auth/register`       | ユーザー登録           |
+| POST     | `/api/auth/login`          | ログイン               |
+| GET      | `/api/todos`               | TODO 一覧取得          |
+| POST     | `/api/todos`               | TODO 作成              |
+| GET      | `/api/todos/{id}`          | TODO 取得              |
+| PATCH    | `/api/todos/{id}`          | TODO 更新              |
+| DELETE   | `/api/todos/{id}`          | TODO 削除              |
+| POST     | `/api/todos/batch`         | バッチ TODO 作成       |
+| POST     | `/api/todos/with-files`    | TODO + ファイル        |
+| POST     | `/api/files/upload`        | ファイルアップロード   |
+| GET      | `/api/files/{id}/download` | ファイルダウンロード   |
+| DELETE   | `/api/files/{id}`          | ファイル削除           |
 
 詳細は [API リファレンス](docs/api.md) を参照してください。
 
@@ -96,5 +102,6 @@ flowchart TB
 - **クリーンアーキテクチャ**: 4層構造による関心の分離
 - **CQRS パターン**: Reader/Writer 分離による責務の明確化
 - **Cache-Aside + Write-Through**: 効率的なキャッシュ戦略
+- **S3 ファイルストレージ**: StorageOps トレイトによる抽象化
 - **トランザクション管理**: RAII パターンによる安全なトランザクション
 - **多層防御**: Edge 検証 + 所有権検証によるセキュリティ

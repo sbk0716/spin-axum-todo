@@ -44,11 +44,14 @@ use tracing_subscriber::EnvFilter;
 // - DbPools: Reader/Writer 分離された DB 接続プール
 // - PostgresTodoReader/Writer: PostgreSQL 実装
 // - PostgresUserReader/Writer: PostgreSQL 実装
+// - PostgresFileReader/Writer: PostgreSQL 実装
 // - TodoCache: Redis キャッシュ
+// - S3StorageService: S3 ファイルストレージ
 // - TransactionalTodoService: トランザクション対応バッチサービス
 use infrastructure::{
-    CachedTodoReader, DbPools, PostgresTodoReader, PostgresTodoWriter, PostgresUserReader,
-    PostgresUserWriter, TodoCache, TransactionalTodoService,
+    CachedTodoReader, DbPools, PostgresFileReader, PostgresFileWriter, PostgresTodoReader,
+    PostgresTodoWriter, PostgresUserReader, PostgresUserWriter, S3StorageService, TodoCache,
+    TransactionalTodoService,
 };
 
 // presentation: Presentation 層の型
@@ -179,6 +182,24 @@ async fn main() -> anyhow::Result<()> {
     // 接続成功ログ
     tracing::info!("Connected to Redis");
 
+    // -------------------------------------------------------------------------
+    // S3 ストレージサービスを作成
+    // -------------------------------------------------------------------------
+    // S3StorageService::from_env(): 環境変数から接続設定を読み込む
+    // - S3_ENDPOINT_URL: カスタムエンドポイント（LocalStack 用）
+    // - S3_BUCKET: バケット名（デフォルト: todo-files）
+    // 環境変数が設定されていない場合は AWS 標準エンドポイントを使用
+    let storage_service = S3StorageService::from_env().await?;
+
+    // バケットの存在確認と作成（LocalStack 用）
+    storage_service.ensure_bucket_exists().await?;
+
+    // 接続成功ログ
+    tracing::info!("Connected to S3 (bucket: {})", storage_service.bucket());
+
+    // Arc でラップ（StorageOps トレイトを通じて共有）
+    let storage = Arc::new(storage_service);
+
     // =========================================================================
     // リポジトリの組み立て（依存性注入 - 統一 CQRS + キャッシュ）
     // =========================================================================
@@ -228,6 +249,20 @@ async fn main() -> anyhow::Result<()> {
     let user_writer = Arc::new(PostgresUserWriter::new(db_pools.writer.clone()));
 
     // -------------------------------------------------------------------------
+    // File Reader を作成（Queries 用）
+    // -------------------------------------------------------------------------
+    // PostgresFileReader: PostgreSQL 実装
+    // db_pools.reader.clone(): Reader プールを使用（レプリカ DB）
+    let file_reader = Arc::new(PostgresFileReader::new(db_pools.reader.clone()));
+
+    // -------------------------------------------------------------------------
+    // File Writer を作成（Commands 用）
+    // -------------------------------------------------------------------------
+    // PostgresFileWriter: PostgreSQL 実装
+    // db_pools.writer.clone(): Writer プールを使用（プライマリ DB）
+    let file_writer = Arc::new(PostgresFileWriter::new(db_pools.writer.clone()));
+
+    // -------------------------------------------------------------------------
     // バッチ操作サービスを作成
     // -------------------------------------------------------------------------
     // TransactionalTodoService: トランザクション対応のバッチ操作
@@ -253,6 +288,9 @@ async fn main() -> anyhow::Result<()> {
     // - user_reader: ユーザー読み取り（AuthService のログインで使用）
     // - user_writer: ユーザー書き込み（AuthService の登録で使用）
     // - batch_service: バッチ操作サービス
+    // - storage_service: S3 ストレージサービス
+    // - file_reader: ファイル読み取り
+    // - file_writer: ファイル書き込み
     // - jwt_secret: JWT 署名用シークレット
     // - jwt_expiry_hours: JWT 有効期間
     let state = Arc::new(AppState::new(
@@ -262,6 +300,9 @@ async fn main() -> anyhow::Result<()> {
         user_reader,      // Queries: ユーザー検索（ログイン）
         user_writer,      // Commands: ユーザー作成（登録）
         batch_service,    // バッチ: 一括作成、TODO + ファイル作成
+        storage,          // S3: ファイルアップロード/ダウンロード（Arc でラップ済み）
+        file_reader,      // Queries: ファイル検索
+        file_writer,      // Commands: ファイル作成/削除
         jwt_secret,       // JWT 署名用シークレット
         jwt_expiry_hours, // JWT 有効期間（時間）
     ));

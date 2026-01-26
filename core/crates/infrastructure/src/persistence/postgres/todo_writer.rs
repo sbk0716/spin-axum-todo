@@ -137,7 +137,7 @@ impl TodoWriter for PostgresTodoWriter {
             "#,
         )
         .bind(todo.id) // $1: 事前に生成した UUID
-        .bind(&todo.user_id) // $2: 所有者 ID
+        .bind(todo.user_id) // $2: 所有者 ID
         .bind(&todo.title) // $3: タイトル
         .bind(&todo.description) // $4: 説明（NULL 許容）
         .bind(todo.completed) // $5: 完了フラグ（通常 false）

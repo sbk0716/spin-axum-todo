@@ -28,7 +28,8 @@ src/
 │   ├── healthz.rs      # ヘルスチェック
 │   ├── auth.rs         # 認証（登録、ログイン）
 │   ├── todo.rs         # TODO CRUD
-│   └── batch.rs        # バッチ操作
+│   ├── batch.rs        # バッチ操作
+│   └── file.rs         # ファイル操作（アップロード、ダウンロード、削除）
 └── middleware/
     ├── mod.rs
     ├── edge_verify.rs  # Edge 検証ミドルウェア
@@ -92,17 +93,27 @@ pub fn create_router<TW, TR, C, UR, UW>(
         .route("/batch", post(batch_create_todos))
         .route("/with-files", post(create_todo_with_files));
 
+    // ファイルルート（Edge 検証必要）
+    let file_routes = Router::new()
+        .route("/upload", post(upload_file))
+        .route("/{id}/download", get(download_file))
+        .route("/{id}", delete(delete_file));
+
     // Edge 検証ミドルウェアを適用
-    let todo_routes = if let Some(secret) = edge_secret {
-        with_edge_verify(todo_routes, secret)
+    let (todo_routes, file_routes) = if let Some(secret) = edge_secret {
+        (
+            with_edge_verify(todo_routes, secret.clone()),
+            with_edge_verify(file_routes, secret),
+        )
     } else {
-        todo_routes  // 開発モード: 検証スキップ
+        (todo_routes, file_routes)  // 開発モード: 検証スキップ
     };
 
     Router::new()
         .route("/health", get(healthz))
         .nest("/api/auth", auth_routes)
         .nest("/api/todos", todo_routes)
+        .nest("/api/files", file_routes)
         .with_state(state)
 }
 ```
@@ -210,6 +221,11 @@ pub struct AppState<TW, TR, C, UR, UW> {
 
     // バッチサービス
     pub batch_service: TransactionalTodoService,
+
+    // ファイル操作
+    pub file_reader: PostgresFileReader,
+    pub file_writer: PostgresFileWriter,
+    pub storage_service: S3StorageService,
 }
 ```
 
@@ -227,6 +243,9 @@ pub struct AppState<TW, TR, C, UR, UW> {
 | DELETE | `/api/todos/{id}` | TODO 削除 | 必要 |
 | POST | `/api/todos/batch` | バッチ作成 | 必要 |
 | POST | `/api/todos/with-files` | TODO+ファイル作成 | 必要 |
+| POST | `/api/files/upload` | ファイルアップロード | 必要 |
+| GET | `/api/files/{id}/download` | ファイルダウンロード | 必要 |
+| DELETE | `/api/files/{id}` | ファイル削除 | 必要 |
 
 ## セキュリティ
 

@@ -29,15 +29,21 @@ use application::{
     services::AuthService,
     // Commands（状態変更操作 - Writer DB プール使用）
     CreateTodoCommand,
+    DeleteFileCommand,
     DeleteTodoCommand,
     // Queries（参照操作 - Reader DB プール使用）
+    DownloadFileQuery,
     GetTodoQuery,
     ListTodosQuery,
     UpdateTodoCommand,
+    UploadFileCommand,
 };
 
 // domain: ドメイン層のトレイト
-use domain::{TodoCacheOps, TodoReader, TodoWriter, UserReader, UserWriter};
+use domain::{
+    FileReader, FileWriter, StorageOps, TodoCacheOps, TodoReader, TodoWriter, UserReader,
+    UserWriter,
+};
 
 // infrastructure: Infrastructure 層のサービス
 use infrastructure::TransactionalTodoService;
@@ -58,20 +64,27 @@ use infrastructure::TransactionalTodoService;
 /// - `C: TodoCacheOps` - キャッシュ操作実装（Write-Through/無効化用）
 /// - `UR: UserReader` - ユーザー読み取り実装（Queries 用）
 /// - `UW: UserWriter` - ユーザー書き込み実装（Commands 用）
+/// - `S: StorageOps` - ストレージ操作実装（ファイルアップロード/ダウンロード/削除用）
 ///
 /// # 使用例
 ///
 /// ```rust,ignore
 /// // ハンドラ内で State エクストラクタを使用
 /// async fn handler(
-///     State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+///     State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
 /// ) -> Result<Json<Todo>, ApiError> {
 ///     let todo = state.get_todo.execute(id, user_id).await?;
 ///     Ok(Json(todo))
 /// }
 /// ```
-pub struct AppState<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWriter>
-{
+pub struct AppState<
+    TW: TodoWriter,
+    TR: TodoReader,
+    C: TodoCacheOps,
+    UR: UserReader,
+    UW: UserWriter,
+    S: StorageOps,
+> {
     /// 認証サービス（UserReader + UserWriter を使用）
     ///
     /// ログイン、登録、JWT 検証を担当
@@ -112,14 +125,53 @@ pub struct AppState<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserRea
     ///
     /// 複数 TODO の一括作成や TODO + ファイル同時作成に使用
     pub batch_service: TransactionalTodoService,
+
+    // -------------------------------------------------------------------------
+    // ファイル操作（Clean Architecture: Application 層のユースケース経由）
+    // -------------------------------------------------------------------------
+    /// ファイルアップロードコマンド
+    ///
+    /// ファイルをストレージにアップロード
+    pub upload_file: UploadFileCommand<S>,
+
+    /// ファイルダウンロードクエリ
+    ///
+    /// ファイルをストレージからダウンロード（所有者確認付き）
+    pub download_file: DownloadFileQuery<TR, S>,
+
+    /// ファイル削除コマンド
+    ///
+    /// ファイルをストレージと DB から削除（所有者確認付き）
+    pub delete_file: DeleteFileCommand<TR, S>,
+
+    /// ファイル読み取りリポジトリ（バッチ操作用）
+    ///
+    /// ファイルメタデータの取得に使用
+    pub file_reader: Arc<dyn FileReader>,
+
+    /// ファイル書き込みリポジトリ（バッチ操作用）
+    ///
+    /// ファイルメタデータの作成、削除に使用
+    pub file_writer: Arc<dyn FileWriter>,
+
+    /// ストレージサービス（バッチ操作用）
+    ///
+    /// TransactionalTodoService からストレージを参照する場合に使用
+    pub storage: Arc<S>,
 }
 
 // =============================================================================
 // AppState 実装
 // =============================================================================
 
-impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWriter>
-    AppState<TW, TR, C, UR, UW>
+impl<
+        TW: TodoWriter,
+        TR: TodoReader,
+        C: TodoCacheOps,
+        UR: UserReader,
+        UW: UserWriter,
+        S: StorageOps,
+    > AppState<TW, TR, C, UR, UW, S>
 {
     /// 新しい AppState を作成する
     ///
@@ -131,6 +183,9 @@ impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWr
     /// * `user_reader` - UserReader の実装（Arc でラップ）
     /// * `user_writer` - UserWriter の実装（Arc でラップ）
     /// * `batch_service` - トランザクション対応バッチサービス
+    /// * `storage` - StorageOps の実装（Arc でラップ）- ファイルストレージ
+    /// * `file_reader` - FileReader の実装（Arc でラップ）
+    /// * `file_writer` - FileWriter の実装（Arc でラップ）
     /// * `jwt_secret` - JWT 署名用シークレット
     /// * `jwt_expiry_hours` - JWT 有効期間（時間）
     ///
@@ -146,6 +201,9 @@ impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWr
         user_reader: Arc<UR>,                    // Arc: AuthService で使用
         user_writer: Arc<UW>,                    // Arc: AuthService で使用
         batch_service: TransactionalTodoService, // Clone 可能
+        storage: Arc<S>,                         // ストレージ操作
+        file_reader: Arc<dyn FileReader>,        // ファイル読み取り
+        file_writer: Arc<dyn FileWriter>,        // ファイル書き込み
         jwt_secret: String,                      // JWT 署名用シークレット
         jwt_expiry_hours: i64,                   // JWT 有効期間（時間）
     ) -> Self {
@@ -161,10 +219,27 @@ impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWr
 
             // TODO Queries
             get_todo: GetTodoQuery::new(Arc::clone(&todo_reader)),
-            list_todos: ListTodosQuery::new(todo_reader),
+            list_todos: ListTodosQuery::new(Arc::clone(&todo_reader)),
 
             // バッチサービス
             batch_service,
+
+            // ファイル操作（Clean Architecture: Application 層経由）
+            upload_file: UploadFileCommand::new(Arc::clone(&storage)),
+            download_file: DownloadFileQuery::new(
+                Arc::clone(&file_reader),
+                Arc::clone(&todo_reader),
+                Arc::clone(&storage),
+            ),
+            delete_file: DeleteFileCommand::new(
+                Arc::clone(&file_reader),
+                Arc::clone(&file_writer),
+                todo_reader,
+                Arc::clone(&storage),
+            ),
+            file_reader,
+            file_writer,
+            storage,
         }
     }
 }
@@ -177,8 +252,14 @@ impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWr
 ///
 /// axum の State エクストラクタは Clone を要求する。
 /// 内部のユースケースは全て Clone 可能（Arc を使用しているため安価）。
-impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWriter> Clone
-    for AppState<TW, TR, C, UR, UW>
+impl<
+        TW: TodoWriter,
+        TR: TodoReader,
+        C: TodoCacheOps,
+        UR: UserReader,
+        UW: UserWriter,
+        S: StorageOps,
+    > Clone for AppState<TW, TR, C, UR, UW, S>
 {
     /// AppState を複製する
     ///
@@ -193,6 +274,12 @@ impl<TW: TodoWriter, TR: TodoReader, C: TodoCacheOps, UR: UserReader, UW: UserWr
             get_todo: self.get_todo.clone(),
             list_todos: self.list_todos.clone(),
             batch_service: self.batch_service.clone(),
+            upload_file: self.upload_file.clone(),
+            download_file: self.download_file.clone(),
+            delete_file: self.delete_file.clone(),
+            file_reader: Arc::clone(&self.file_reader),
+            file_writer: Arc::clone(&self.file_writer),
+            storage: Arc::clone(&self.storage),
         }
     }
 }

@@ -19,6 +19,7 @@
 // - User: UserWriter / UserReader
 // - File: FileWriter / FileReader
 // - Cache: TodoCacheOps（キャッシュ操作）
+// - Storage: StorageOps（ファイルストレージ操作）
 // =============================================================================
 
 // -----------------------------------------------------------------------------
@@ -27,6 +28,9 @@
 
 /// File エンティティのリポジトリトレイトを定義
 mod file_repository;
+
+/// ストレージ操作トレイトを定義
+mod storage_repository;
 
 /// TODO キャッシュ操作トレイトを定義
 mod todo_cache;
@@ -48,6 +52,9 @@ mod user_repository;
 
 /// File の読み取り/書き込みトレイトを再エクスポート
 pub use file_repository::{FileReader, FileWriter};
+
+/// ストレージ操作トレイトを再エクスポート
+pub use storage_repository::StorageOps;
 
 /// TODO キャッシュ操作トレイトを再エクスポート
 pub use todo_cache::TodoCacheOps;

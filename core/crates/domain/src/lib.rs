@@ -104,7 +104,8 @@ pub use errors::DomainError;
 /// - `UserReader`, `UserWriter`: ユーザーの読み書き
 /// - `TodoCacheOps`: TODO キャッシュ操作
 /// - `TodoFilter`: TODO 一覧取得のフィルタ条件
+/// - `StorageOps`: ファイルストレージ操作（S3 等の抽象化）
 pub use repositories::{
-    FileReader, FileWriter, TodoCacheOps, TodoFilter, TodoReader, TodoWriter, UserReader,
-    UserWriter,
+    FileReader, FileWriter, StorageOps, TodoCacheOps, TodoFilter, TodoReader, TodoWriter,
+    UserReader, UserWriter,
 };

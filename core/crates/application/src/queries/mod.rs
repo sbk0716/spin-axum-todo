@@ -18,6 +18,9 @@
 // サブモジュールの宣言
 // -----------------------------------------------------------------------------
 
+/// ファイルダウンロードクエリ
+mod download_file;
+
 /// 単一 TODO 取得クエリ
 mod get_todo;
 
@@ -27,6 +30,9 @@ mod list_todos;
 // -----------------------------------------------------------------------------
 // 再エクスポート（Re-export）
 // -----------------------------------------------------------------------------
+
+/// DownloadFileQuery, DownloadFileResult を公開
+pub use download_file::{DownloadFileQuery, DownloadFileResult};
 
 /// GetTodoQuery を公開
 pub use get_todo::GetTodoQuery;

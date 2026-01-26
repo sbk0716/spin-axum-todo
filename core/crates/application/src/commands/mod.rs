@@ -24,8 +24,14 @@
 /// TODO 作成コマンド
 mod create_todo;
 
+/// ファイル削除コマンド
+mod delete_file;
+
 /// TODO 削除コマンド
 mod delete_todo;
+
+/// ファイルアップロードコマンド
+mod upload_file;
 
 /// TODO 更新コマンド
 mod update_todo;
@@ -37,8 +43,14 @@ mod update_todo;
 /// CreateTodoCommand を公開
 pub use create_todo::CreateTodoCommand;
 
+/// DeleteFileCommand を公開
+pub use delete_file::DeleteFileCommand;
+
 /// DeleteTodoCommand を公開
 pub use delete_todo::DeleteTodoCommand;
+
+/// UploadFileCommand, UploadFileResult を公開
+pub use upload_file::{UploadFileCommand, UploadFileResult};
 
 /// UpdateTodoCommand を公開
 pub use update_todo::UpdateTodoCommand;

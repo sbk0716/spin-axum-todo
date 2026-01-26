@@ -37,7 +37,9 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 // TodoCacheOps: キャッシュ操作トレイト
 // TodoReader/Writer: TODO 読み書きトレイト
 // UserReader/Writer: ユーザー読み書きトレイト
-use domain::{File, Todo, TodoCacheOps, TodoReader, TodoWriter, UserReader, UserWriter};
+use domain::{
+    File, StorageOps, Todo, TodoCacheOps, TodoReader, TodoWriter, UserReader, UserWriter,
+};
 
 // infrastructure: Infrastructure 層の型
 // FileInput: ファイル作成入力パラメータ
@@ -107,11 +109,12 @@ pub async fn batch_create_todos<
     C: TodoCacheOps, // キャッシュ操作（未使用）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Json エクストラクタ: リクエストボディを BatchCreateTodosRequest にデシリアライズ
     Json(req): Json<BatchCreateTodosRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -229,11 +232,12 @@ pub async fn create_todo_with_files<
     C: TodoCacheOps, // キャッシュ操作（未使用）
     UR: UserReader,  // ユーザー読み取り（未使用）
     UW: UserWriter,  // ユーザー書き込み（未使用）
+    S: StorageOps,   // ストレージ操作（未使用）
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Json エクストラクタ: リクエストボディを CreateTodoWithFilesRequest にデシリアライズ
     Json(req): Json<CreateTodoWithFilesRequest>,
 ) -> Result<impl IntoResponse, ApiError> {

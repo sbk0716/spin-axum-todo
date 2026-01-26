@@ -24,7 +24,15 @@
 | POST     | `/api/todos/batch`           | バッチ TODO 作成       | 201 / 400  |
 | POST     | `/api/todos/with-files`      | TODO + ファイル作成    | 201 / 400  |
 
-> **Note**: TODO API は `X-User-Id` ヘッダーが必要です（Edge 層が JWT から抽出して付与）。
+### ファイル API
+
+| メソッド | パス                       | 説明                                        | レスポンス |
+| -------- | -------------------------- | ------------------------------------------- | ---------- |
+| POST     | `/api/files/upload`        | ファイルアップロード（multipart/form-data） | 201 / 400  |
+| GET      | `/api/files/{id}/download` | ファイルダウンロード                        | 200 / 404  |
+| DELETE   | `/api/files/{id}`          | ファイル削除                                | 204 / 404  |
+
+> **Note**: TODO API / ファイル API は `X-User-Id` ヘッダーが必要です（Edge 層が JWT から抽出して付与）。
 
 ## 認証 API 詳細
 
@@ -222,6 +230,72 @@ TODO とその添付ファイルを1トランザクションで作成。
 > **Note**: ファイル本体は事前にストレージにアップロード済みの前提。
 > このエンドポイントはメタデータのみを DB に登録します。
 
+## ファイル API 詳細
+
+### POST /api/files/upload
+
+ファイルをストレージにアップロード。
+
+**リクエスト:**
+
+`Content-Type: multipart/form-data`
+
+```
+--boundary
+Content-Disposition: form-data; name="file"; filename="document.pdf"
+Content-Type: application/pdf
+
+<binary data>
+--boundary--
+```
+
+**レスポンス (201 Created):**
+
+```json
+{
+  "storage_path": "users/{user_id}/files/{uuid}/document.pdf",
+  "filename": "document.pdf",
+  "mime_type": "application/pdf",
+  "size_bytes": 12345
+}
+```
+
+**エラー:**
+
+| ステータス | 条件 |
+| ---------- | ---- |
+| 400 | ファイルなし、ファイル名不正、サイズ超過 |
+
+### GET /api/files/{id}/download
+
+ファイルをダウンロード。所有者（TODO の所有者）のみアクセス可能。
+
+**レスポンス (200 OK):**
+
+- `Content-Type`: 保存時の MIME タイプ
+- `Content-Disposition`: `attachment; filename="document.pdf"`
+- Body: ファイルバイナリ
+
+**エラー:**
+
+| ステータス | 条件 |
+| ---------- | ---- |
+| 404 | ファイルが存在しない、または所有権なし |
+
+### DELETE /api/files/{id}
+
+ファイルを削除。ストレージと DB の両方から削除される。
+
+**レスポンス (204 No Content):**
+
+ボディなし。
+
+**エラー:**
+
+| ステータス | 条件 |
+| ---------- | ---- |
+| 404 | ファイルが存在しない、または所有権なし |
+
 ## 使用例
 
 ### Edge 層経由（推奨）
@@ -254,6 +328,20 @@ curl -X PATCH http://localhost:3000/api/todos/{id} \
 
 # 6. TODO 削除
 curl -X DELETE http://localhost:3000/api/todos/{id} \
+  -H "Authorization: Bearer $TOKEN"
+
+# 7. ファイルアップロード
+curl -X POST http://localhost:3000/api/files/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@document.pdf"
+
+# 8. ファイルダウンロード
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/api/files/{id}/download \
+  -o downloaded.pdf
+
+# 9. ファイル削除
+curl -X DELETE http://localhost:3000/api/files/{id} \
   -H "Authorization: Bearer $TOKEN"
 ```
 

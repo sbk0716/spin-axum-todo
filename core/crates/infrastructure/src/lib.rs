@@ -22,6 +22,9 @@
 // │ - TodoCache: Redis キャッシュ操作                           │
 // │ - CachedTodoReader: キャッシュ付き TodoReader（デコレータ）  │
 // ├─────────────────────────────────────────────────────────────┤
+// │ ファイルストレージ                                           │
+// │ - S3StorageService: S3 ファイルストレージ（LocalStack 対応）│
+// ├─────────────────────────────────────────────────────────────┤
 // │ トランザクション                                             │
 // │ - TransactionalTodoService: バッチ操作（複数 TODO 一括作成）│
 // │ - FileInput: ファイル作成用入力データ                       │
@@ -74,6 +77,9 @@ pub use persistence::postgres::PostgresFileWriter;
 
 // Redis キャッシュ
 pub use persistence::redis::TodoCache;
+
+// S3 ストレージ
+pub use persistence::s3::S3StorageService;
 
 // キャッシュ付きリポジトリ（デコレータ）
 pub use repositories::CachedTodoReader;

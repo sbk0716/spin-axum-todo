@@ -149,4 +149,19 @@ pub enum DomainError {
     /// エラーをログに記録し、処理を継続することが多い。
     #[error("Cache error: {0}")]
     Cache(String),
+
+    /// 外部サービスエラー（500 Internal Server Error に対応）
+    ///
+    /// 外部サービス（S3、外部 API など）との通信が失敗した場合に使用。
+    ///
+    /// # 使用例
+    /// - S3 アップロード/ダウンロード失敗
+    /// - S3 バケット作成失敗
+    /// - 外部 API への HTTP リクエスト失敗
+    ///
+    /// # 特性
+    /// 外部サービスは一時的に利用できないことがある。
+    /// リトライやフォールバックの戦略を検討すべき。
+    #[error("External service error: {0}")]
+    External(String),
 }

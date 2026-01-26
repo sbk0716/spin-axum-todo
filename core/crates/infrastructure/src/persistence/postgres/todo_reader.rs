@@ -236,7 +236,7 @@ impl TodoReader for PostgresTodoReader {
                 ORDER BY created_at DESC
                 "#,
             )
-            .bind(&filter.user_id) // $1: ユーザー ID
+            .bind(filter.user_id) // $1: ユーザー ID
             .bind(completed) // $2: 完了フラグ
             .fetch_all(&self.pool) // 全件取得
             .await // 非同期実行
@@ -251,7 +251,7 @@ impl TodoReader for PostgresTodoReader {
                 ORDER BY created_at DESC
                 "#,
             )
-            .bind(&filter.user_id) // $1: ユーザー ID のみ
+            .bind(filter.user_id) // $1: ユーザー ID のみ
             .fetch_all(&self.pool) // 全件取得
             .await // 非同期実行
             .map_err(|e| DomainError::Repository(e.to_string()))?, // エラー変換

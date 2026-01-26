@@ -134,11 +134,11 @@ impl<W: TodoWriter, C: TodoCacheOps> CreateTodoCommand<W, C> {
 
         // 4. Write-Through: キャッシュに保存（エラーは無視）
         // キャッシュエラーはメイン操作に影響させない
-        if let Some(cache) = &self.cache {
-            if let Err(e) = cache.set(&created).await {
-                // 警告ログを出力して処理を続行
-                warn!(todo_id = %created.id, error = %e, "Failed to cache created todo");
-            }
+        if let Some(cache) = &self.cache
+            && let Err(e) = cache.set(&created).await
+        {
+            // 警告ログを出力して処理を続行
+            warn!(todo_id = %created.id, error = %e, "Failed to cache created todo");
         }
 
         // 5. ログ出力（構造化ログ）

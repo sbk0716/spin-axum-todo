@@ -131,7 +131,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 #   - マクロ不要の型安全なルーティング
 #   - Tower ミドルウェアとの統合
 #   - 型安全なエクストラクタ（State, Path, Json, Query）
-axum = "0.8"
+# features:
+#   - multipart: ファイルアップロード用 Multipart エクストラクタ
+axum = { version = "0.8", features = ["multipart"] }
 
 # -----------------------------------------------------------------------------
 # データベース

@@ -128,10 +128,10 @@ impl<W: TodoWriter, C: TodoCacheOps> UpdateTodoCommand<W, C> {
             .await?;
 
         // 4. Write-Through: キャッシュを更新（エラーは無視）
-        if let Some(cache) = &self.cache {
-            if let Err(e) = cache.set(&updated).await {
-                warn!(todo_id = %updated.id, error = %e, "Failed to cache updated todo");
-            }
+        if let Some(cache) = &self.cache
+            && let Err(e) = cache.set(&updated).await
+        {
+            warn!(todo_id = %updated.id, error = %e, "Failed to cache updated todo");
         }
 
         // 5. ログ出力

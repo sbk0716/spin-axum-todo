@@ -33,7 +33,7 @@ use std::sync::Arc;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
 // domain: ドメイン層のトレイト（ジェネリクス制約用）
-use domain::{TodoCacheOps, TodoReader, TodoWriter, UserReader, UserWriter};
+use domain::{StorageOps, TodoCacheOps, TodoReader, TodoWriter, UserReader, UserWriter};
 
 // application: Application 層の DTO
 use application::dto::{LoginRequest, RegisterRequest, TokenResponse, UserResponse};
@@ -86,10 +86,11 @@ pub async fn register<
     C: TodoCacheOps, // キャッシュ操作（このハンドラでは未使用）
     UR: UserReader,  // ユーザー読み取り（重複チェック）
     UW: UserWriter,  // ユーザー書き込み（新規作成）
+    S: StorageOps,   // ストレージ操作（このハンドラでは未使用）
 >(
     // State エクストラクタ: AppState を Arc でラップして取得
     // Arc により複数リクエストで状態を共有可能
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Json エクストラクタ: リクエストボディを RegisterRequest にデシリアライズ
     // デシリアライズ失敗時は 400 Bad Request が自動返却される
     Json(req): Json<RegisterRequest>,
@@ -148,9 +149,10 @@ pub async fn login<
     C: TodoCacheOps, // キャッシュ操作（このハンドラでは未使用）
     UR: UserReader,  // ユーザー読み取り（メールで検索）
     UW: UserWriter,  // ユーザー書き込み（このハンドラでは未使用）
+    S: StorageOps,   // ストレージ操作（このハンドラでは未使用）
 >(
     // State エクストラクタ: AppState を Arc でラップして取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW>>>,
+    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
     // Json エクストラクタ: リクエストボディを LoginRequest にデシリアライズ
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {

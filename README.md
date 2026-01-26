@@ -20,20 +20,22 @@ flowchart TB
     subgraph Core["Core Layer (axum) :3001"]
         direction TB
         Handler["Handlers"]
-        UseCase["Use Cases"]
+        CmdQry["Commands / Queries"]
         Repo["Repositories"]
-        Handler --> UseCase --> Repo
+        Handler -->|実行| CmdQry -->|呼び出し| Repo
     end
 
     subgraph Storage["Storage"]
         PG[("PostgreSQL")]
         RD[("Redis")]
+        S3[("S3/LocalStack")]
     end
 
     Client -->|"HTTP Request<br/>Authorization: Bearer JWT"| Gateway
     Gateway -->|"X-User-Id<br/>X-Request-Id<br/>X-Edge-Verified"| Handler
-    Repo --> PG
-    Repo --> RD
+    Repo -->|データ永続化| PG
+    Repo -->|キャッシュ| RD
+    Repo -->|ファイル操作| S3
 
 ```
 
@@ -41,12 +43,13 @@ flowchart TB
 
 ## 技術スタック
 
-| レイヤー | 技術 | 説明 |
-|---------|------|------|
-| Edge | [Spin](https://spinframework.dev/) / WASM | JWT 検証、リクエストルーティング |
-| Core | [axum](https://github.com/tokio-rs/axum) | REST API、認証、ビジネスロジック |
-| DB | PostgreSQL 17 | データ永続化（users, todos, files） |
-| Cache | Redis 7 | エンティティキャッシュ |
+| レイヤー | 技術                                         | 説明                                      |
+| -------- | -------------------------------------------- | ----------------------------------------- |
+| Edge     | [Spin](https://spinframework.dev/) / WASM    | JWT 検証、リクエストルーティング          |
+| Core     | [axum](https://github.com/tokio-rs/axum)     | REST API、認証、ビジネスロジック          |
+| DB       | PostgreSQL 17                                | データ永続化（users, todos, files）       |
+| Cache    | Redis 7                                      | エンティティキャッシュ                    |
+| Storage  | S3 / [LocalStack](https://localstack.cloud/) | ファイルストレージ（開発時は LocalStack） |
 
 ## クイックスタート
 
@@ -86,7 +89,7 @@ make help        # ヘルプを表示
 
 # セットアップ
 make setup       # 初期セットアップ
-make up          # インフラ起動（PostgreSQL + Redis）
+make up          # インフラ起動（PostgreSQL + Redis + LocalStack）
 make down        # インフラ停止
 make migrate     # マイグレーション実行
 
@@ -106,6 +109,10 @@ make test-core   # Core 層単体で全エンドポイントをテスト
 make test-all    # Core + Edge 両方のテストを実行
 make status      # サービスの稼働状況を確認
 make demo        # 認証フローのデモ
+
+# S3/LocalStack
+make s3-ls            # S3 バケット内のファイル一覧
+make s3-create-bucket # S3 バケットを作成（LocalStack 用）
 ```
 
 ## API エンドポイント
@@ -114,22 +121,30 @@ make demo        # 認証フローのデモ
 
 ### 認証 API（認証不要）
 
-| メソッド | パス | 説明 |
-|---------|------|------|
-| POST | `/api/auth/register` | ユーザー登録 |
-| POST | `/api/auth/login` | ログイン（JWT 取得） |
+| メソッド | パス                 | 説明                 |
+| -------- | -------------------- | -------------------- |
+| POST     | `/api/auth/register` | ユーザー登録         |
+| POST     | `/api/auth/login`    | ログイン（JWT 取得） |
 
 ### TODO API（認証必須）
 
-| メソッド | パス | 説明 |
-|---------|------|------|
-| GET | `/api/todos` | TODO 一覧取得（`?completed=true/false` でフィルタ可） |
-| POST | `/api/todos` | TODO 作成 |
-| GET | `/api/todos/{id}` | TODO 取得 |
-| PATCH | `/api/todos/{id}` | TODO 更新 |
-| DELETE | `/api/todos/{id}` | TODO 削除 |
-| POST | `/api/todos/batch` | バッチ作成（複数 TODO を一括作成） |
-| POST | `/api/todos/with-files` | ファイル付き TODO 作成 |
+| メソッド | パス                    | 説明                                                  |
+| -------- | ----------------------- | ----------------------------------------------------- |
+| GET      | `/api/todos`            | TODO 一覧取得（`?completed=true/false` でフィルタ可） |
+| POST     | `/api/todos`            | TODO 作成                                             |
+| GET      | `/api/todos/{id}`       | TODO 取得                                             |
+| PATCH    | `/api/todos/{id}`       | TODO 更新                                             |
+| DELETE   | `/api/todos/{id}`       | TODO 削除                                             |
+| POST     | `/api/todos/batch`      | バッチ作成（複数 TODO を一括作成）                    |
+| POST     | `/api/todos/with-files` | ファイル付き TODO 作成                                |
+
+### ファイル API（認証必須）
+
+| メソッド | パス                       | 説明                                        |
+| -------- | -------------------------- | ------------------------------------------- |
+| POST     | `/api/files/upload`        | ファイルアップロード（multipart/form-data） |
+| GET      | `/api/files/{id}/download` | ファイルダウンロード                        |
+| DELETE   | `/api/files/{id}`          | ファイル削除                                |
 
 ## 認証フロー
 
@@ -156,14 +171,14 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/todos
 spin-axum-todo/
 ├── README.md                    # このファイル
 ├── Makefile                     # 開発コマンド
-├── compose.yaml                 # Docker Compose（PostgreSQL + Redis）
+├── compose.yaml                 # Docker Compose（PostgreSQL + Redis + LocalStack）
 ├── .env.example                 # 環境変数テンプレート
 │
 ├── scripts/                     # 開発スクリプト
 │   ├── setup.sh                 # 初期セットアップ
 │   ├── dev.sh                   # 開発環境起動
-│   ├── test-edge.sh             # Edge 層統合テスト（29 テスト）
-│   └── test-core.sh             # Core 層単体テスト（27 テスト）
+│   ├── test-edge.sh             # Edge 層統合テスト（35 テスト）
+│   └── test-core.sh             # Core 層単体テスト（32 テスト）
 │
 ├── edge/                        # Edge Layer (Spin/WASM)
 │   ├── spin.toml                # Spin 設定
@@ -207,34 +222,36 @@ spin-axum-todo/
 
 ### セキュリティヘッダー
 
-| ヘッダー | 用途 |
-|---------|-----|
-| `X-User-Id` | 認証済みユーザー ID（UUID） |
-| `X-Request-Id` | リクエスト追跡 |
-| `X-Edge-Verified` | Edge 通過の証明 |
+| ヘッダー          | 用途                        |
+| ----------------- | --------------------------- |
+| `X-User-Id`       | 認証済みユーザー ID（UUID） |
+| `X-Request-Id`    | リクエスト追跡              |
+| `X-Edge-Verified` | Edge 通過の証明             |
 
 ## 環境変数
 
 > 全ての環境変数は [セットアップガイド](core/docs/setup.md#環境変数) を参照
 
-| 変数 | 説明 |
-|------|------|
-| `DATABASE_WRITER_URL` | PostgreSQL 書き込み用接続文字列 |
-| `DATABASE_READER_URL` | PostgreSQL 読み取り用接続文字列 |
-| `REDIS_URL` | Redis 接続文字列 |
-| `JWT_SECRET` | JWT 署名用シークレット |
-| `EDGE_SECRET` | Edge 検証用シークレット |
+| 変数                  | 説明                                                     |
+| --------------------- | -------------------------------------------------------- |
+| `DATABASE_WRITER_URL` | PostgreSQL 書き込み用接続文字列                          |
+| `DATABASE_READER_URL` | PostgreSQL 読み取り用接続文字列                          |
+| `REDIS_URL`           | Redis 接続文字列                                         |
+| `JWT_SECRET`          | JWT 署名用シークレット                                   |
+| `EDGE_SECRET`         | Edge 検証用シークレット                                  |
+| `S3_ENDPOINT_URL`     | S3 エンドポイント（LocalStack: `http://localhost:4566`） |
+| `S3_BUCKET`           | S3 バケット名（デフォルト: `todo-files`）                |
 
 ## ドキュメント
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [セットアップガイド](core/docs/setup.md) | 環境構築、DB スキーマ、マイグレーション |
-| [API リファレンス](core/docs/api.md) | 全エンドポイント、リクエスト/レスポンス例 |
-| [アーキテクチャ](core/docs/architecture.md) | Clean Architecture、CQRS パターン |
-| [セキュリティ](core/docs/security.md) | 認証・認可、バリデーション |
-| [キャッシュ戦略](core/docs/cache.md) | Redis キャッシュパターン |
-| [トランザクション](core/docs/transaction.md) | バッチ操作、整合性保証 |
+| ドキュメント                                 | 内容                                      |
+| -------------------------------------------- | ----------------------------------------- |
+| [セットアップガイド](core/docs/setup.md)     | 環境構築、DB スキーマ、マイグレーション   |
+| [API リファレンス](core/docs/api.md)         | 全エンドポイント、リクエスト/レスポンス例 |
+| [アーキテクチャ](core/docs/architecture.md)  | Clean Architecture、CQRS パターン         |
+| [セキュリティ](core/docs/security.md)        | 認証・認可、バリデーション                |
+| [キャッシュ戦略](core/docs/cache.md)         | Redis キャッシュパターン                  |
+| [トランザクション](core/docs/transaction.md) | バッチ操作、整合性保証                    |
 
 ## 参考資料
 
