@@ -1,0 +1,25 @@
+[package]
+name = "gateway"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.51"
+spin-sdk = "5.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+anyhow = "1.0.100"
+uuid = { version = "1.11", features = ["v4"] }
+
+[package.metadata.component]
+package = "demo:gateway"
+
+[package.metadata.component.target]
+path = "../wit"
+world = "gateway-world"
+
+[package.metadata.component.target.dependencies]
+"demo:auth" = { path = "../wit" }

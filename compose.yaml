@@ -1,0 +1,51 @@
+# =============================================================================
+# spin-axum-todo: Docker Compose 設定
+# =============================================================================
+# Edge + Core のハイブリッドアーキテクチャに必要なインフラを提供
+#
+# 使い方:
+#   docker compose up -d      # バックグラウンドで起動
+#   docker compose down       # 停止
+#   docker compose logs -f    # ログを表示
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL: データ永続化
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:17
+    container_name: spin-axum-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis: エンティティキャッシュ
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7
+    container_name: spin-axum-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

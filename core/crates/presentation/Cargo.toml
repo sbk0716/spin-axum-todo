@@ -1,0 +1,101 @@
+# =============================================================================
+# presentation/Cargo.toml: プレゼンテーション層のクレート設定
+# =============================================================================
+# クリーンアーキテクチャの最外層。HTTP インターフェースを提供。
+#
+# 責務:
+#   - HTTP ハンドラ（todo, auth, batch, healthz）
+#   - ルーティング設定（routes.rs）
+#   - アプリケーション状態管理（state.rs）
+#   - ミドルウェア（edge_verify, user_context）
+#   - エラーレスポンス変換（error.rs）
+#
+# 依存関係:
+#   - domain: エンティティ型を使用（レスポンス用）
+#   - application: ユースケース（Commands, Queries）を呼び出す
+#   - infrastructure: リポジトリ実装を DI で受け取る
+#
+# HTTP フロー:
+#   Request → Router → Middleware → Handler → UseCase → Response
+#
+# テスト:
+#   cargo test -p presentation    # プレゼンテーション層のみテスト
+# =============================================================================
+
+[package]
+# クレート名: 他のクレートから `use presentation::*;` でインポート
+name = "presentation"
+# バージョン: セマンティックバージョニング
+version = "0.1.0"
+# Rust エディション: 2021（axum との互換性のため）
+edition = "2021"
+
+[dependencies]
+# -----------------------------------------------------------------------------
+# 内部依存（ワークスペース内のクレート）
+# -----------------------------------------------------------------------------
+# domain: エンティティ型（Todo, User, File）をレスポンスに使用
+# DomainError をハンドラでキャッチしてエラーレスポンスに変換
+domain = { path = "../domain" }
+
+# application: ユースケースの呼び出し
+# Commands: CreateTodoCommand, UpdateTodoCommand, DeleteTodoCommand
+# Queries: GetTodoQuery, ListTodosQuery
+# Services: AuthService
+application = { path = "../application" }
+
+# infrastructure: リポジトリ実装型を DI で使用
+# PostgresTodoReader, PostgresTodoWriter, TodoCache, etc.
+# TransactionalTodoService（バッチ操作）
+infrastructure = { path = "../infrastructure" }
+
+# -----------------------------------------------------------------------------
+# 非同期トレイト
+# -----------------------------------------------------------------------------
+# async-trait: カスタムエクストラクタで async fn を使用
+async-trait = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# エラーハンドリング
+# -----------------------------------------------------------------------------
+# thiserror: ApiError 列挙型の定義に使用
+thiserror = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# 型定義
+# -----------------------------------------------------------------------------
+# uuid: Path パラメータ（/:id）の UUID パース
+uuid = { workspace = true }
+
+# chrono: レスポンスの日時フィールド
+chrono = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# シリアライズ
+# -----------------------------------------------------------------------------
+# serde: リクエスト/レスポンスの JSON 変換
+# #[derive(Serialize, Deserialize)] でマクロ展開
+serde = { workspace = true }
+
+# serde_json: エラーレスポンスの JSON 生成
+serde_json = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# ロギング
+# -----------------------------------------------------------------------------
+# tracing: ハンドラ実行時のログ出力
+# info!("GET /todos/{}", id);
+# warn!("Authentication failed");
+tracing = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# Web フレームワーク
+# -----------------------------------------------------------------------------
+# axum 0.8: HTTP ハンドラとルーティング
+# 主な機能:
+#   - Router: ルーティング設定
+#   - State: アプリケーション状態の DI
+#   - Path, Query, Json: リクエストパラメータの抽出
+#   - IntoResponse: レスポンス変換トレイト
+#   - middleware: Tower ミドルウェア統合
+axum = { workspace = true }

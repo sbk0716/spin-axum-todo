@@ -1,0 +1,22 @@
+[package]
+name = "auth"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.51"
+base64 = "0.22.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+hmac = "0.12.1"
+sha2 = "0.10.9"
+
+[package.metadata.component]
+package = "demo:auth"
+
+[package.metadata.component.target]
+path = "../wit"
+world = "auth-world"

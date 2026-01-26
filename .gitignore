@@ -1,0 +1,25 @@
+# =============================================================================
+# spin-axum-todo: プロジェクト共通 .gitignore
+# =============================================================================
+
+# Environment (secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node.js (if any)
+node_modules/
+package-lock.json

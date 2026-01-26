@@ -1,0 +1,106 @@
+# =============================================================================
+# api/Cargo.toml: API サーバー（エントリーポイント）のクレート設定
+# =============================================================================
+# クリーンアーキテクチャにおける Composition Root（構成ルート）。
+#
+# 責務:
+#   - 依存性注入（DI）: 具象型のインスタンス生成と組み立て
+#   - サーバー起動: tokio ランタイム上で axum サーバーを起動
+#   - 設定読み込み: 環境変数と .env ファイルの読み込み
+#
+# 依存関係:
+#   - 全ての層（domain, application, infrastructure, presentation）に依存
+#   - このクレートのみが具象型を知っている
+#   - 他の層はトレイト経由でアクセス
+#
+# 実行方法:
+#   cargo run -p api                    # 開発モード
+#   cargo build --release -p api        # リリースビルド
+#   ./target/release/api                # 本番実行
+#
+# 環境変数:
+#   APP_ADDR=0.0.0.0:3000              # サーバーアドレス
+#   DATABASE_WRITER_URL=postgres://...  # プライマリ DB
+#   DATABASE_READER_URL=postgres://...  # レプリカ DB（オプション）
+#   REDIS_URL=redis://localhost:6379    # Redis
+#   JWT_SECRET=your-secret              # JWT 署名シークレット
+#   JWT_EXPIRY_HOURS=24                 # JWT 有効期間
+#   EDGE_SECRET=your-edge-secret        # Edge 検証シークレット
+#   RUST_LOG=info,sqlx=warn             # ログレベル
+# =============================================================================
+
+[package]
+# クレート名: `cargo run -p api` で実行
+name = "api"
+# バージョン: セマンティックバージョニング
+version = "0.1.0"
+# Rust エディション: 2021
+edition = "2021"
+
+[dependencies]
+# -----------------------------------------------------------------------------
+# 内部依存（ワークスペース内の全クレート）
+# -----------------------------------------------------------------------------
+# domain: エンティティ型の参照（main.rs では直接使用しないが、
+#         型の整合性のためにワークスペースに含める）
+domain = { path = "../crates/domain" }
+
+# application: ユースケース型の参照（main.rs では直接使用しないが、
+#              型の整合性のためにワークスペースに含める）
+application = { path = "../crates/application" }
+
+# infrastructure: リポジトリ実装の具象型を生成
+# DbPools, PostgresTodoReader, PostgresTodoWriter, etc.
+# TodoCache, CachedTodoReader, TransactionalTodoService
+infrastructure = { path = "../crates/infrastructure" }
+
+# presentation: Router と AppState を構築
+# create_router(), AppState::new()
+presentation = { path = "../crates/presentation" }
+
+# -----------------------------------------------------------------------------
+# Web サーバー
+# -----------------------------------------------------------------------------
+# axum: サーバー起動（axum::serve）
+axum = { workspace = true }
+
+# tokio: 非同期ランタイム
+# #[tokio::main] マクロで非同期 main 関数を有効化
+# TcpListener でソケットをバインド
+tokio = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# 設定
+# -----------------------------------------------------------------------------
+# dotenvy: .env ファイルを環境変数に読み込む
+# dotenv().ok() で失敗しても続行（本番では .env は使用しない）
+dotenvy = { workspace = true }
+
+# anyhow: main 関数のエラーハンドリング
+# Result<(), anyhow::Error> で任意のエラーを返せる
+anyhow = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# ロギング
+# -----------------------------------------------------------------------------
+# tracing: 構造化ログの出力
+# info!("Listening on {}", addr);
+tracing = { workspace = true }
+
+# tracing-subscriber: ログ購読者の設定
+# EnvFilter で RUST_LOG 環境変数を使用
+tracing-subscriber = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# データベース（型の参照用）
+# -----------------------------------------------------------------------------
+# sqlx: PgPool 型を main.rs で使用
+# DbPools::from_env() の戻り値型に必要
+sqlx = { workspace = true }
+
+# -----------------------------------------------------------------------------
+# Redis（クライアント生成用）
+# -----------------------------------------------------------------------------
+# redis: redis::Client::open() でクライアントを生成
+# TodoCache::new() に渡す
+redis = { workspace = true }
