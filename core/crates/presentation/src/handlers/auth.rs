@@ -21,10 +21,6 @@
 // 外部クレートのインポート
 // -----------------------------------------------------------------------------
 
-// std::sync::Arc: スレッド安全な参照カウントポインタ
-// 複数のリクエスト間で AppState を共有するために使用
-use std::sync::Arc;
-
 // axum: Web フレームワーク
 // extract::State: 状態を抽出するエクストラクタ
 // http::StatusCode: HTTP ステータスコード
@@ -88,9 +84,9 @@ pub async fn register<
     UW: UserWriter,  // ユーザー書き込み（新規作成）
     S: StorageOps,   // ストレージ操作（このハンドラでは未使用）
 >(
-    // State エクストラクタ: AppState を Arc でラップして取得
-    // Arc により複数リクエストで状態を共有可能
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Json エクストラクタ: リクエストボディを RegisterRequest にデシリアライズ
     // デシリアライズ失敗時は 400 Bad Request が自動返却される
     Json(req): Json<RegisterRequest>,
@@ -151,8 +147,8 @@ pub async fn login<
     UW: UserWriter,  // ユーザー書き込み（このハンドラでは未使用）
     S: StorageOps,   // ストレージ操作（このハンドラでは未使用）
 >(
-    // State エクストラクタ: AppState を Arc でラップして取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Json エクストラクタ: リクエストボディを LoginRequest にデシリアライズ
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {

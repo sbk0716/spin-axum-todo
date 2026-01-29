@@ -76,40 +76,43 @@ impl S3StorageService {
         Self { client, bucket }
     }
 
-    /// 環境変数から S3StorageService を初期化する
+    /// Config から S3StorageService を初期化する
     ///
-    /// # Environment Variables
+    /// # Arguments
     ///
-    /// * `S3_BUCKET` - バケット名（デフォルト: todo-files）
-    /// * `S3_ENDPOINT_URL` - カスタムエンドポイント（LocalStack 用、オプション）
+    /// * `bucket` - S3 バケット名
+    /// * `endpoint_url` - カスタムエンドポイント URL（LocalStack 用、None の場合は AWS 標準）
     ///
-    /// # Returns
+    /// # 使用例
     ///
-    /// * `Ok(S3StorageService)` - 初期化成功
-    /// * `Err(DomainError::External)` - 設定エラー
+    /// ```rust,ignore
+    /// let config = AppConfig::from_env()?;
+    /// let storage = S3StorageService::from_config(
+    ///     &config.s3.bucket,
+    ///     config.s3.endpoint_url.as_deref(),
+    /// ).await?;
+    /// ```
     ///
     /// # LocalStack 対応
     ///
-    /// `S3_ENDPOINT_URL` が設定されている場合、カスタムエンドポイントを使用。
+    /// `endpoint_url` が指定されている場合、カスタムエンドポイントを使用。
     /// `force_path_style(true)` を設定して LocalStack との互換性を確保。
-    /// これにより LocalStack でのローカル開発が可能。
-    pub async fn from_env() -> Result<Self, DomainError> {
-        // バケット名を取得（デフォルト: todo-files）
-        let bucket = std::env::var("S3_BUCKET").unwrap_or_else(|_| "todo-files".to_string());
-
-        // カスタムエンドポイントを取得（LocalStack 用）
-        let endpoint_url = std::env::var("S3_ENDPOINT_URL").ok();
+    pub async fn from_config(
+        bucket: &str,
+        endpoint_url: Option<&str>,
+    ) -> Result<Self, DomainError> {
+        let bucket = bucket.to_string();
 
         // AWS 設定をロード
         let sdk_config = aws_config::from_env().load().await;
 
         // S3 クライアントを作成
-        let client = if let Some(ref endpoint) = endpoint_url {
+        let client = if let Some(endpoint) = endpoint_url {
             info!(endpoint = %endpoint, bucket = %bucket, "Initializing S3 with custom endpoint (LocalStack)");
             // LocalStack 用（カスタムエンドポイント + パススタイル強制）
             let s3_config = aws_sdk_s3::config::Builder::from(&sdk_config)
                 .endpoint_url(endpoint)
-                .force_path_style(true) // LocalStack 互換性のため必要
+                .force_path_style(true)
                 .build();
             Client::from_conf(s3_config)
         } else {

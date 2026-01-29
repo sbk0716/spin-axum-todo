@@ -121,7 +121,8 @@ tracing = "0.1"
 # tracing-subscriber: tracing のログ出力設定
 # features:
 #   - env-filter: RUST_LOG 環境変数でログレベルをフィルタリング
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+#   - json: JSON 形式でログ出力（マネージドサービス向け）
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # -----------------------------------------------------------------------------
 # Web フレームワーク

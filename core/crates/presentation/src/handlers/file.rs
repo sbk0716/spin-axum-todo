@@ -19,9 +19,6 @@
 // 外部クレートのインポート
 // -----------------------------------------------------------------------------
 
-// std::sync::Arc: スレッド安全な参照カウントポインタ
-use std::sync::Arc;
-
 // axum: Web フレームワーク
 use axum::{
     body::Body,
@@ -114,7 +111,9 @@ pub async fn upload_file<
     UW: UserWriter + 'static,
     S: StorageOps + 'static,
 >(
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     user: UserContext,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -198,7 +197,9 @@ pub async fn download_file<
     UW: UserWriter + 'static,
     S: StorageOps + 'static,
 >(
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     user: UserContext,
     Path(id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
@@ -253,7 +254,9 @@ pub async fn delete_file<
     UW: UserWriter + 'static,
     S: StorageOps + 'static,
 >(
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     user: UserContext,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {

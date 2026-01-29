@@ -24,9 +24,6 @@
 // 外部クレートのインポート
 // -----------------------------------------------------------------------------
 
-// std::sync::Arc: スレッド安全な参照カウントポインタ
-use std::sync::Arc;
-
 // axum: Web フレームワーク
 // Path: URL パスパラメータの抽出（例: /todos/{id} の id）
 // Query: クエリパラメータの抽出（例: ?completed=true）
@@ -162,7 +159,7 @@ pub async fn list_todos<
     // UserContext エクストラクタ: X-User-Id ヘッダーから抽出
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Query エクストラクタ: クエリパラメータを ListQuery にデシリアライズ
     Query(query): Query<ListQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -225,7 +222,7 @@ pub async fn create_todo<
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Json エクストラクタ: リクエストボディを CreateTodoRequest にデシリアライズ
     Json(req): Json<CreateTodoRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -286,7 +283,7 @@ pub async fn get_todo<
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Path エクストラクタ: URL パスから id を抽出
     // /api/todos/{id} の {id} 部分が Uuid としてパースされる
     Path(id): Path<Uuid>,
@@ -341,7 +338,7 @@ pub async fn update_todo<
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Path エクストラクタ: URL パスから id を抽出
     Path(id): Path<Uuid>,
     // Json エクストラクタ: リクエストボディを UpdateTodoRequest にデシリアライズ
@@ -400,7 +397,7 @@ pub async fn delete_todo<
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
     // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Path エクストラクタ: URL パスから id を抽出
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {

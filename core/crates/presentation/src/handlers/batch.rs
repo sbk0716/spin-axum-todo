@@ -21,9 +21,6 @@
 // 外部クレートのインポート
 // -----------------------------------------------------------------------------
 
-// std::sync::Arc: スレッド安全な参照カウントポインタ
-use std::sync::Arc;
-
 // axum: Web フレームワーク
 // extract::State: アプリケーション状態の抽出
 // http::StatusCode: HTTP ステータスコード
@@ -113,8 +110,9 @@ pub async fn batch_create_todos<
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
-    // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Json エクストラクタ: リクエストボディを BatchCreateTodosRequest にデシリアライズ
     Json(req): Json<BatchCreateTodosRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -236,8 +234,9 @@ pub async fn create_todo_with_files<
 >(
     // UserContext エクストラクタ: 認証済みユーザー情報
     user: UserContext,
-    // State エクストラクタ: AppState を取得
-    State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+    // State エクストラクタ: AppState を取得（axum 推奨）
+    // axum が各リクエストで state.clone() を呼び出す
+    State(state): State<AppState<TW, TR, C, UR, UW, S>>,
     // Json エクストラクタ: リクエストボディを CreateTodoWithFilesRequest にデシリアライズ
     Json(req): Json<CreateTodoWithFilesRequest>,
 ) -> Result<impl IntoResponse, ApiError> {

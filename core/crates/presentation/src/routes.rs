@@ -24,10 +24,6 @@
 // 外部クレートのインポート
 // -----------------------------------------------------------------------------
 
-// std::sync::Arc: スレッド安全な参照カウントポインタ
-// 複数ハンドラ間で状態を共有するために使用
-use std::sync::Arc;
-
 // axum: Web フレームワーク
 // routing: ルーティングヘルパー（get, post, delete など）
 // Router: ルーターオブジェクト
@@ -55,7 +51,7 @@ use crate::state::AppState;
 ///
 /// # Arguments
 ///
-/// * `state` - アプリケーション状態（Arc でラップ）
+/// * `state` - アプリケーション状態（Clone 可能、内部で Arc を使用）
 /// * `edge_secret` - Edge 検証用シークレット（None の場合は検証をスキップ）
 ///
 /// # Returns
@@ -99,8 +95,8 @@ pub fn create_router<
     UW: UserWriter + 'static,
     S: StorageOps + 'static,
 >(
-    state: Arc<AppState<TW, TR, C, UR, UW, S>>, // Arc で状態を共有
-    edge_secret: Option<String>,                // Option: None なら検証をスキップ
+    state: AppState<TW, TR, C, UR, UW, S>, // axum 推奨: Clone 可能な AppState
+    edge_secret: Option<String>,           // Option: None なら検証をスキップ
 ) -> Router {
     // -------------------------------------------------------------------------
     // 認証ルート（Edge 検証不要、パブリック）
@@ -185,7 +181,13 @@ pub fn create_router<
         // ファイルルート（Edge 検証あり）
         // /api/files/* にネスト
         .nest("/api/files", file_routes)
-        // with_state: 状態をルーターに関連付け
-        // ハンドラ内で State<Arc<AppState<...>>> として取得可能
+        // with_state: 状態をルーターに関連付け（axum 推奨パターン）
+        //
+        // Clone が必要な理由:
+        // 1. Router::with_state() が `S: Clone` トレイト境界を持つ
+        //    → Clone 未実装だとここでコンパイルエラー
+        // 2. State エクストラクタが各リクエストで state.clone() を呼び出す
+        //
+        // ハンドラ内で State<AppState<...>> として取得可能
         .with_state(state)
 }

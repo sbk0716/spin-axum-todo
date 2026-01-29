@@ -55,7 +55,19 @@ use infrastructure::TransactionalTodoService;
 /// アプリケーション状態
 ///
 /// ユースケースインスタンスを保持し、axum の State エクストラクタ経由で
-/// 各ハンドラに渡される。
+/// 各ハンドラに渡される。依存性注入（DI）コンテナとして機能する。
+///
+/// # なぜジェネリクスを使用するか
+///
+/// axum 公式ドキュメントでは「ジェネリクスをトレイトオブジェクトより優先」と
+/// 推奨されている。ジェネリクスを使用することで：
+///
+/// - **コンパイル時型安全性**: 型エラーをコンパイル時に検出
+/// - **ゼロコスト抽象化**: 動的ディスパッチのオーバーヘッドなし
+/// - **テスト容易性**: モック実装への差し替えが容易
+///
+/// トレードオフとして、ハンドラの型シグネチャが複雑になるが、
+/// 型安全性とパフォーマンスのメリットが上回ると判断。
 ///
 /// # ジェネリクス
 ///
@@ -68,10 +80,14 @@ use infrastructure::TransactionalTodoService;
 ///
 /// # 使用例
 ///
+/// axum 推奨パターンを採用:
+/// - AppState は Clone を実装
+/// - 各リクエストで axum が state.clone() を呼び出す
+///
 /// ```rust,ignore
-/// // ハンドラ内で State エクストラクタを使用
+/// // ハンドラ内で State エクストラクタを使用（axum 推奨）
 /// async fn handler(
-///     State(state): State<Arc<AppState<TW, TR, C, UR, UW, S>>>,
+///     State(state): State<AppState<TW, TR, C, UR, UW, S>>,
 /// ) -> Result<Json<Todo>, ApiError> {
 ///     let todo = state.get_todo.execute(id, user_id).await?;
 ///     Ok(Json(todo))
@@ -250,8 +266,35 @@ impl<
 
 /// AppState の Clone 実装
 ///
-/// axum の State エクストラクタは Clone を要求する。
-/// 内部のユースケースは全て Clone 可能（Arc を使用しているため安価）。
+/// # なぜ Clone 実装が必要か（axum 推奨パターン）
+///
+/// axum 公式ドキュメント (https://docs.rs/axum/latest/axum/extract/struct.State.html):
+/// > "Your top level state needs to derive Clone"
+///
+/// axum メンテナー mladedav (GitHub Discussion #3223):
+/// > "When you extract the state, axum will clone it and pass it to your handler.
+/// >  You can use Arc to make the clone cheap if your state is large or expensive to clone."
+///
+/// # Clone が必要な箇所（2箇所）
+///
+/// 1. **Router::with_state()**: `S: Clone` トレイト境界を持つ
+///    ```text
+///    impl<S> Router<S> {
+///        pub fn with_state<S2>(self, state: S) -> Router<S2>
+///        where
+///            S: Clone,  // ← ここで Clone が要求される
+///    ```
+///    → `with_state(state)` の呼び出し時点でコンパイルエラーになる
+///
+/// 2. **State エクストラクタ**: 内部で `FromRef::from_ref(&state)` を呼び出し、
+///    これが `state.clone()` を実行する
+///    → 各リクエスト処理時に clone() が呼ばれる
+///
+/// # パフォーマンス
+///
+/// 全フィールドは内部で Arc を使用しているため、clone() は
+/// 各フィールドの Arc 参照カウントを +1 するだけ。
+/// 実際のデータはコピーされず、O(1)（約5ナノ秒/フィールド）。
 impl<
         TW: TodoWriter,
         TR: TodoReader,
@@ -261,10 +304,6 @@ impl<
         S: StorageOps,
     > Clone for AppState<TW, TR, C, UR, UW, S>
 {
-    /// AppState を複製する
-    ///
-    /// 内部のユースケースは全て Arc を使用しているため、
-    /// 実際のデータはコピーされず、参照カウントが増えるだけ。
     fn clone(&self) -> Self {
         Self {
             auth_service: self.auth_service.clone(),

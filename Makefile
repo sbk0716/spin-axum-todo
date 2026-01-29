@@ -28,6 +28,7 @@ DATABASE_WRITER_URL ?= postgres://app:app@localhost:5432/app
 DATABASE_READER_URL ?= $(DATABASE_WRITER_URL)
 REDIS_URL ?= redis://localhost:6379
 JWT_SECRET ?= super-secret-key
+JWT_EXPIRY_HOURS ?= 24
 EDGE_SECRET ?= super-secret-edge-key
 RUST_LOG ?= info
 
@@ -149,6 +150,7 @@ run-core: ## Core 層を起動
 	@echo "    S3_ENDPOINT_URL=$(S3_ENDPOINT_URL)"
 	@echo "    S3_BUCKET=$(S3_BUCKET)"
 	@echo "    JWT_SECRET=****"
+	@echo "    JWT_EXPIRY_HOURS=$(JWT_EXPIRY_HOURS)"
 	@echo "    RUST_LOG=$(RUST_LOG)"
 	cd core && \
 		APP_ADDR=$(APP_ADDR) \
@@ -161,6 +163,7 @@ run-core: ## Core 層を起動
 		AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) \
 		AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) \
 		JWT_SECRET=$(JWT_SECRET) \
+		JWT_EXPIRY_HOURS=$(JWT_EXPIRY_HOURS) \
 		EDGE_SECRET=$(EDGE_SECRET) \
 		RUST_LOG=$(RUST_LOG) \
 		cargo run -p api
